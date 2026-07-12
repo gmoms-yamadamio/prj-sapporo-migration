@@ -1,0 +1,9 @@
+{
+  "_comment": "移行元データはすべてシュパーク1サイト。旧siteIdの値に関わらず一律shupark。",
+  "site_code": "shupark",
+  "management_group_code": "shupark",
+  "default": {
+    "site_code": "shupark",
+    "management_group_code": "shupark"
+  }
+}

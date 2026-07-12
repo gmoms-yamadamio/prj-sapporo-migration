@@ -1,0 +1,19 @@
+# 本番相当の個人情報（PII）を含むデータは Git 管理対象外とする。
+# 移行用PCで実データを配置しても、下記パスは常に追跡・コミット対象外になる。
+
+# 旧サイト生CSV（会員・注文・住所・ポイント等の実データ）
+input/raw/*.csv
+
+# CEC会員エクスポート・突合用データ（サンプルのみ許可）
+input/cec/*.csv
+!input/cec/member_export_sample.csv
+
+# ETL生成物（会員・注文・住所・ポイント等の実データ、レポート類）
+output/processed/*.csv
+output/products/*.csv
+output/reports/*
+
+# Pythonキャッシュ
+scripts/lib/__pycache__/
+**/__pycache__/
+*.pyc

@@ -1,0 +1,17 @@
+{
+  "1": {
+    "cutoff_order_date": "2026-06-30",
+    "require_shipped": true,
+    "description": "1回目移行: 注文日(orderDate)が6/30以前、かつ出荷完了(shipDate)している注文のみ対象"
+  },
+  "2": {
+    "cutoff_order_date": null,
+    "require_shipped": true,
+    "description": "2回目移行: 前回(1回目)未移行、かつ出荷完了している注文のみ対象（前回移行済み判定は未実装・MIGRATION_PREVIOUS_ORDER_IDS_CSVで指定）"
+  },
+  "3": {
+    "cutoff_order_date": null,
+    "require_shipped": true,
+    "description": "3回目移行: 前回(2回目)未移行、かつ出荷完了している注文のみ対象。3回目で全注文の移行完了を想定（前回移行済み判定は未実装・MIGRATION_PREVIOUS_ORDER_IDS_CSVで指定）"
+  }
+}

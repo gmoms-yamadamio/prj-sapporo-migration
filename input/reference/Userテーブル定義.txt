@@ -1,0 +1,33 @@
+NAME_EN:英語名	NAME_JA:日本語名	COMMENT:	SUPER:
+T_User	ユーザーアカウント	"https://docs.google.com/spreadsheets/d/1Z7P4iBsG6_fyN2JCXrsAwzP1ILT_RuFatve_N6WsYc0/edit#gid=1723927763
+
+IdentityUserでNormalizedEmailとNormalizedUserNameにindexが貼られる"	IdentityUser<long>
+
+
+
+
+
+NAME_EN:名前	NAME_JA:説明	TYPE:型	NN:	PK:	IGNORE:	FK:	COMMENT:	ATTRIBUTES:
+Id	ユーザーId	bigint	✅	✅	✅		親クラスで定義済み	
+Email	メールアドレス	nvarchar:256	✅		✅		親クラスで定義済み	
+PasswordHash	パスワードハッシュ	nvarchar:max			✅		親クラスで定義済み	
+PhoneNumber	電話番号	nvarchar:max	✅		✅		親クラスで定義済み	
+SubscStoreCustomerId	サブスクストア時代の顧客ID	nvarchar:24					サブスクストアから移行	
+LastName	姓	nvarchar:64	✅				サブスクストアから移行	
+FirstName	名	nvarchar:64	✅				サブスクストアから移行	
+LastNameKana	姓(カナ)	nvarchar:64					"サブスクストアから移行
+会員DBではnull可、Commerbleではnullの場合「・」をつける"	
+FirstNameKana	名(カナ)	nvarchar:64					"サブスクストアから移行
+会員DBではnull可、Commerbleではnullの場合「・」をつける"	
+ZipCode	郵便番号	nvarchar:8	✅				サブスクストアから移行	
+Prefecture	都道府県		✅				サブスクストアから移行	
+City	市区町村	nvarchar:128	✅				サブスクストアから移行	
+Street	番地	nvarchar:128	✅				サブスクストアから移行	
+Building	ビル名等	nvarchar:128					サブスクストアから移行	
+IsApproveMailDelivery	メール承認フラグ	bit	✅				サブスクストアから移行	
+Sex	性別	HumanSex	✅				サブスクストアから移行	
+Birthday	生年月日	datetimeoffset:7	✅				サブスクストアから移行	
+CreatedAt	作成日時	datetimeoffset:7					サブスクストアから移行	[DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+UpdatedAt	更新日時	datetimeoffset:7						[DatabaseGenerated(DatabaseGeneratedOption.Computed)]
+DeletedAt	削除日時	datetimeoffset:7					日付が入っている場合削除済みアカウントとみなす	
+GmoMemberId	GMOメンバーID	nvarchar:128					サブスクストアから移行	
