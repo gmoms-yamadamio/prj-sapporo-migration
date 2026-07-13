@@ -124,10 +124,12 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 
 | 条件 | 処理 |
 | --- | --- |
-| ゲスト注文（`isGuest=1`） | **移行対象外**。`output/reports/excluded_orders.csv` に記録 |
-| キャンセル（`orderStatus=10`） | **移行対象外**。同上 |
-| 削除済み会員の注文 | **移行対象外**（`reason=deleted_member`）。同上 |
+| 削除済み会員の注文 | **移行対象外**（`reason=deleted_member`）。`output/reports/excluded_orders.csv` に記録 |
+| ゲスト注文（`isGuest=1`） | **移行対象外**。同上（`reason=guest`） |
+| キャンセル（`orderStatus=10`） | **移行対象外**。同上（`reason=cancelled`） |
 | 会員注文で User 結合不能 | `output/reports/unmatched_order_members.csv` |
+
+> **除外理由の判定優先順位**: 削除済み会員 → ゲスト → キャンセル → 二重移行済 → 移行対象期間外 → 未出荷、の順で判定する（`lib/order_filters.py` `exclusion_reason()`）。削除済み会員の注文がキャンセル済みである等、複数の除外条件に該当する場合でも `excluded_orders.csv` の `reason` は常に `deleted_member` を優先して記録し、除外理由の内訳集計（[1回目移行チェックリスト.md](../1回目移行チェックリスト.md) 3.9）が会員単位の除外を正しく反映するようにしている。
 
 ## 出荷完了の判定条件（確定）
 
@@ -172,3 +174,4 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 | 2026-07-09 | 1.2 | IF 設計書「注文履歴 CSV 項目」シートのシュパーク列マッピングを全項目反映。受取人住所ソースを `DeliveryOrder.addressId` に修正（`invoiceAddressId` は誤り）。税額合計・小計の算出方法を確定。決済・配送関連の固定値項目（決済プロファイルコード等）を追加 |
 | 2026-07-11 | 1.3 | 「出荷完了の判定条件（暫定）」を追加。`PurchaseOrder.shipDate` の NULL 以外判定を暫定採用。サンプルデータでは全件 NULL のため本番データでの検証が必要な旨を明記 |
 | 2026-07-11 | 1.4 | 「出荷完了」の判定条件（`shipDate` 基準）を本番データで確認済みとして確定 |
+| 2026-07-14 | 1.5 | 除外理由の判定優先順位を変更。削除済み会員の注文を最優先の除外理由とし、キャンセル・ゲスト等と重複する場合も `reason=deleted_member` で記録するよう `exclusion_reason()` を修正（除外理由内訳の集計精度向上のため） |

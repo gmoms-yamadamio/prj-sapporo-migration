@@ -43,13 +43,16 @@ def exclusion_reason(
     require_shipped: bool = False,
     already_migrated_order_ids: set[str] | None = None,
 ) -> str | None:
+    # 削除済み会員の注文は、ゲスト／キャンセル等の注文単体の状態に関わらず
+    # 最優先で除外する（会員単位の除外はレポート上の理由内訳でも最優先で
+    # 集計されるべきため。business-rules-confirmation.md #1 参照）。
+    if deleted_usernos and customer and customer.get("isGuest") != "1":
+        if customer.get("UserNo", "") in deleted_usernos:
+            return "deleted_member"
     if customer and is_guest_order(customer):
         return "guest"
     if is_cancelled_order(purchase_order):
         return "cancelled"
-    if deleted_usernos and customer and customer.get("isGuest") != "1":
-        if customer.get("UserNo", "") in deleted_usernos:
-            return "deleted_member"
     if already_migrated_order_ids and purchase_order.get("orderId", "") in already_migrated_order_ids:
         return "already_migrated"
     if cutoff_order_date and not is_within_cutoff(purchase_order, cutoff_order_date):
