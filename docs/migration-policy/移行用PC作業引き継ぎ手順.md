@@ -115,6 +115,17 @@ git clone https://github.com/gmoms-yamadamio/prj-sapporo-migration.git data-migr
 - 現在の移行ラウンドは環境変数 `MIGRATION_ROUND`（既定値`1`）で管理している。移行用PCでも同じラウンドで作業する場合は明示的に指定するか既定値のままでよいか確認すること。
 - `output/reports/*` はGit管理対象外のため、移行用PCへは§4の方法でこれらのファイルも一緒に転送するか、移行用PCで `python scripts/run_all.py` を再実行して再生成すること。
 
+### 6.1 直近の更新内容（2026-07-14 実施分）
+
+以下2件は `main` ブランチにコミット済み（`git pull` で取得可能）。詳細は各リンク先ドキュメントの改訂履歴を参照。
+
+| コミット | 内容 | 影響 | 詳細 |
+| --- | --- | --- | --- |
+| `0c31145` 注文除外理由の判定優先順位を削除済み会員最優先に変更 | 削除済み会員に紐づく注文がキャンセル／ゲスト注文と重複する場合、`excluded_orders.csv` の除外理由が `cancelled`/`guest` 側に記録され、`deleted_member` の内訳が正確に集計できていなかった問題を修正。`lib/order_filters.py` の `exclusion_reason()` で削除済み会員判定を最優先にした | レポート上の理由内訳のみ変化。最終的な `order.csv` の出力内容・除外件数の合計には影響なし | [注文履歴CSV.md §フィルタルール](deliverables/注文履歴CSV.md#フィルタルール確定)、[business-rules-confirmation.md](business-rules-confirmation.md) |
+| `1cf6a0f` 注文履歴CSVの会員ID決定ロジックを簡略化 | 会員CSVの赤星商店CEC会員との突合はメールアドレス一致で行うため、更新パターン`U`の場合 `User.csv` とCEC側のメールアドレスは定義上一致する。この前提に基づき、`scripts/generate_order.py` を、会員CSVの突合結果（新規`C`/更新`U`）を経由せず**一律「旧サイト `User.csv` のメールアドレス」を直接参照**する方式に変更 | ロジック単純化（CEC会員データの読込が注文CSV生成時に不要になった）。出力値自体は理論上変化しない | [注文履歴CSV.md §会員CSVとの連携](deliverables/注文履歴CSV.md#会員-csv-との連携会員-id-欄)、[会員CSV.md](deliverables/会員CSV.md) |
+
+- 移行用PCで最新の除外理由内訳・会員ID設定結果を確認する場合は、本番データ配置後に `python scripts/run_all.py` を再実行して `output/reports/*` を再生成すること（Git管理対象外のため自動的には反映されない）。
+
 ## 7. Cursor固有の注意点まとめ
 
 | 項目 | 引き継がれるか | 対応 |
