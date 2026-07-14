@@ -37,7 +37,7 @@ PurchaseOrder (orderId, customerId, siteId, 金額, taxRate...)
     │       ├─→ UserAccount (UserNo) → User.csv … 会員メールアドレス
     │       └─→ Address.csv (orderedAddressId) … 購入者住所
     ├─→ DeliveryOrder (orderId) → Address.csv (addressId) … 受取人住所
-    │       └─→ DeliveryOrder.mailAddr … 受取人メールアドレス（未設定時は購入者メールアドレスで補完）
+    │       └─→ 受取人メールアドレス … 暫定でブランク（空値）出力（#28・要お客様合意）
     └─→ OrderLine (orderId) … 税額合計（tax 合算）・小計（linePrice 合算）
 ```
 
@@ -67,10 +67,10 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 | 対象 | 氏名・メール | 住所（郵便番号〜建物名・電話番号） |
 |---|---|---|
 | 購入者 | `OrderCustomer.csv`（`lastName`/`firstName`/`lastNameKana`/`firstNameKana`/`emailAddr`） | `Address.csv`（`OrderCustomer.orderedAddressId` で結合） |
-| 受取人 | `Address.csv`（`recipientlastname`/`recipientfirstname`/`recipientlastnamekana`/`recipientfirstnamekana`）＋メールは `DeliveryOrder.mailAddr` | `Address.csv`（`DeliveryOrder.addressId` で結合。`DeliveryOrder.csv` は `PurchaseOrder.orderId` で結合） |
+| 受取人 | `Address.csv`（`recipientlastname`/`recipientfirstname`/`recipientlastnamekana`/`recipientfirstnamekana`）＋メールは**暫定ブランク**（#28・要お客様合意） | `Address.csv`（`DeliveryOrder.addressId` で結合。`DeliveryOrder.csv` は `PurchaseOrder.orderId` で結合） |
 
-- 受取人メールアドレスが未設定の場合は購入者メールアドレスで補完する（IF 設計書の記載に基づく）
-- IF 設計書上は受取人メールアドレスの参照元が「`Address.csv` / `mailAddr`」と記載されているが、`Address.csv` に `mailAddr` 列は存在しない（実際は `DeliveryOrder.csv` に存在）。**実データのスキーマに合わせて `DeliveryOrder.mailAddr` を正とする**（IF 設計書側の誤記と判断。要お客様確認）
+- 受取人メールアドレスは**暫定でブランク（空値）出力**（お客様合意が必要。[business-rules-confirmation.md](../business-rules-confirmation.md) #28）
+- IF 設計書上は受取人メールアドレスの参照元が「`Address.csv` / `mailAddr`」と記載されているが、`Address.csv` に `mailAddr` 列は存在しない（実際は `DeliveryOrder.csv` に存在）。`DeliveryOrder.mailAddr` への読み替えも候補だが、現時点はブランク出力の暫定方針とし、参照元をお客様に確認する
 
 ## 処理順序
 
@@ -103,22 +103,22 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 | 購入者建物名〜役職 | 任意 | `Address`（`orderedAddressId`） | `building`。会社名・会社名カナ・部署名・役職は旧データになし（空） |
 | 受取人氏名（苗字/名） | 必須 | `Address.recipientlastname` / `recipientfirstname`（`DeliveryOrder.addressId`） | そのまま |
 | 受取人氏名カナ（苗字/名） | 必須 | `Address.recipientlastnamekana` / `recipientfirstnamekana`（同上） | そのまま |
-| 受取人メールアドレス | 任意 | `DeliveryOrder.mailAddr` | 未設定時は購入者メールアドレスで補完（IF 設計書は `Address.mailAddr` と記載だが実データに存在せず、`DeliveryOrder.mailAddr` に読み替え） |
+| 受取人メールアドレス | 任意 | — | **ブランク（空値）で出力**（暫定方針。お客様合意が必要。IF 設計書は `Address.mailAddr` と記載だが実データに存在せず、`DeliveryOrder.mailAddr` への読み替えは採用しない） |
 | 受取人電話番号〜町名・番地 | 必須 | `Address`（`DeliveryOrder.addressId`） | `tel` / `zipCode` / `pref` / `city` / `street` |
 | 受取人建物名〜役職 | 任意 | `Address`（同上） | `building`。会社名以下は空 |
 | 調整金額の税率 | 任意 | — | 固定 `10`（IF 設計書の説明列より。税率 10% 前提） |
 | 調整金額の税区分ID | 任意 | — | 固定 `tax_type_standard`（IF 設計書の説明列より） |
-| 決済プロファイルコード | 必須 | — | 固定 `migration-xxxxx`（データ移行用決済コード。**実際の値は未確定・要確認**） |
+| 決済プロファイルコード | 必須 | — | 固定 `migration-payment`（データ移行用決済コード。**確定**） |
 | 決済手数料 | 任意 | — | 固定 `0` |
 | 決済手数料の税率 | 任意 | — | 固定 `10` |
-| 発送元コード | 必須 | — | 固定 `migration-xxxxx`（データ移行用発送元コード。**実際の値は未確定・要確認**） |
-| 配送温度帯ID | 必須 | — | 固定値（[商品系Excel.md](./商品系Excel.md) の販売条件と表記揺れあり。`A1111` or `T1111` 要確認） |
-| 配送方法コード | 必須 | — | 固定 `migration-xxxxx`（データ移行用配送方法コード。**実際の値は未確定・要確認**） |
+| 発送元コード | 必須 | — | 固定 `migration-warehouse`（データ移行用発送元コード。**確定**） |
+| 配送温度帯ID | 必須 | — | 固定 `T1111`（**確定**。[商品系Excel.md](./商品系Excel.md) の販売条件と統一） |
+| 配送方法コード | 必須 | — | 固定 `migration-delivery`（データ移行用配送方法コード。**確定**） |
 | 配送料の税率 | 必須 | — | 固定 `10` |
 | 基本配送料 | 必須 | `PurchaseOrder.deliveryCharge` | 配送料と同値を設定 |
 | 在庫引当フラグ | 必須 | — | 固定 `0` |
 
-> `決済プロファイルコード` / `発送元コード` / `配送方法コード` の実値（`migration-xxxxx` 部分）は IF 設計書上プレースホルダのままで、CEC 側の実際のマスタ登録値が未確定。本番移行前に確定が必要（[business-rules-confirmation.md](../business-rules-confirmation.md) に追記）。
+> `決済プロファイルコード` / `発送元コード` / `配送方法コード` の実値は **`migration-payment` / `migration-warehouse` / `migration-delivery` で確定**（[business-rules-confirmation.md](../business-rules-confirmation.md) #26）。これらのコードが CEC 本番マスタに登録済みであることを本番移行前に確認すること。
 
 ## フィルタルール（確定）
 
@@ -159,10 +159,10 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 - [x] `User` / `UserAccount` / `OrderCustomer.UserNo` の結合ロジック
 - [x] 税額合計の算出方法 → **`OrderLine.tax` の `orderId` 単位合算（IF 設計書で確定）**
 - [x] 小計の算出方法 → **`OrderLine.linePrice` の `orderId` 単位合算（IF 設計書で確定。従来の減算方式は廃止）**
-- [ ] 調整金額（`discountPrice`）の符号（マイナス表記が必須のため、旧データが正数の場合は反転が必要。本番データで検証）
-- [ ] 決済プロファイルコード／発送元コード／配送方法コードの実際の固定値（`migration-xxxxx` の具体値）
-- [ ] 配送温度帯ID の固定値（IF 設計書本文は `A1111`、サンプル行は `T1111` で表記が食い違う。要お客様確認）
-- [ ] 受取人メールアドレスの参照元列（IF 設計書は `Address.mailAddr` と記載だが実データには存在しない。`DeliveryOrder.mailAddr` への読み替えを暫定採用）
+- [ ] 調整金額（`discountPrice`）の符号（マイナス表記が必須のため、旧データが正数の場合は反転が必要。**本番（移行）データを調査して判断予定**）
+- [x] 決済プロファイルコード／発送元コード／配送方法コードの実際の固定値 → **`migration-payment` / `migration-warehouse` / `migration-delivery`（確定）**。CEC 本番マスタへの登録有無は要確認
+- [x] 配送温度帯ID の固定値 → **`T1111`（確定）**
+- [ ] 受取人メールアドレス → **ブランク（空値）で出力する暫定方針。お客様合意が必要**（[business-rules-confirmation.md](../business-rules-confirmation.md) #28）
 - [x] 「出荷完了」の判定条件 → **`PurchaseOrder.shipDate` が NULL 以外（確定。本番データで確認済み）**（[出荷完了の判定条件（確定）](#出荷完了の判定条件確定) 参照）
 
 ## 改訂履歴

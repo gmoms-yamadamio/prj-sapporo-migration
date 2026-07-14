@@ -82,12 +82,15 @@ IF 設計書のシュパーク列は「販売価格の税率 ← `OrderLine.csv`
 
 一方、`PurchaseOrder.csv` には注文ヘッダ単位で `taxRate` 列が存在する（サンプルでは全件 `0`）。
 
+**軽減税率対象商品（8%）は存在することが確定している**ため、固定 `10` の一律適用は不可。商品単位の税率を保持する必要がある。
+
 | 案 | 内容 | 課題 |
 | --- | --- | --- |
-| A | `PurchaseOrder.taxRate`（注文単位）を明細全行に適用 | サンプルでは全件 `0` のため軽減税率(8%)・標準税率(10%)の判定ができない。本番データで値の分布を確認する必要あり |
-| B（現行の暫定実装） | 固定 `10` をデフォルト適用 | 軽減税率商品（8%）が存在する場合に誤りとなる |
+| A | `Products.csv` に税率列を追加してもらい、SKU 単位の税率を適用 | **お客様調整中**（税率列を含めて受領する方向）。受領後はこれを正とする（第一候補） |
+| B | `PurchaseOrder.taxRate`（注文単位）を明細全行に適用 | 注文単位のため明細ごとの軽減／標準の混在に対応できない。サンプルは全件 `0` |
+| C（旧・暫定実装） | 固定 `10` をデフォルト適用 | 軽減税率商品（8%）が存在するため**誤りとなる（不可）** |
 
-→ 本番データ受領後に `PurchaseOrder.taxRate` の値分布を確認し、A/B いずれを採用するかお客様に確認する（[business-rules-confirmation.md](../business-rules-confirmation.md) に追記）。
+→ 案 A（`Products.csv` の税率列）での対応を前提に、税率列の受領を待って実装・検証する（[business-rules-confirmation.md](../business-rules-confirmation.md) #21・#27）。
 
 ## 未確定事項（TODO）
 
@@ -95,7 +98,7 @@ IF 設計書のシュパーク列は「販売価格の税率 ← `OrderLine.csv`
 - [x] `productId` → `SKUコード` / `販売条件コード` への変換ルール
 - [x] 基本販売価格の入力元 → `OrderLine.reportPrice`（IF 設計書で確定）
 - [x] 同一 `orderId` に複数明細がある場合の明細番号採番ルール → 0 始まり連番
-- [ ] 税率（`販売価格の税率`）の変換方法 → IF 設計書は `OrderLine.taxRate` を指定するが実データに存在しない。`PurchaseOrder.taxRate` の代用可否を本番データで検証（上記「税率ソースの矛盾」参照）
+- [ ] 税率（`販売価格の税率`）の変換方法 → **軽減税率(8%)対象商品が存在するため固定 `10` は不可**。`Products.csv` への税率列追加をお客様調整中（案 A）。税率列受領後に実装・検証（[business-rules-confirmation.md](../business-rules-confirmation.md) #21・#27）
 
 ## 改訂履歴
 

@@ -26,16 +26,8 @@ def load_round_rules(config_dir: Path, round_no: str | None = None) -> dict:
     return rules
 
 
-def load_already_migrated_order_ids() -> set[str]:
-    """前回までに移行済みの注文番号一覧（列名『注文番号』）。
-
-    環境変数 `MIGRATION_PREVIOUS_ORDER_IDS_CSV` で CSV パスを指定した場合のみ読み込む。
-    2回目・3回目移行で使用予定（1回目は常に空集合、未指定時も空集合）。
-    """
-    path_str = os.environ.get("MIGRATION_PREVIOUS_ORDER_IDS_CSV")
-    if not path_str:
-        return set()
-    path = Path(path_str)
+def _load_order_ids_from_csv(path: Path) -> set[str]:
+    """1 つの CSV から注文番号集合を読み込む（列名『注文番号』、無ければ先頭列）。"""
     if not path.exists():
         return set()
     with path.open(encoding="utf-8-sig", newline="") as f:
@@ -45,3 +37,23 @@ def load_already_migrated_order_ids() -> set[str]:
         if not col:
             return set()
         return {row[col] for row in reader if row.get(col)}
+
+
+def load_already_migrated_order_ids() -> set[str]:
+    """前回までに移行済みの注文番号一覧（列名『注文番号』）。
+
+    環境変数 `MIGRATION_PREVIOUS_ORDER_IDS_CSV` で CSV パスを指定した場合のみ読み込む。
+    **カンマ区切りで複数の CSV を指定できる**（3 回目移行で 1 回目・2 回目の
+    `order.csv` をまとめて指定する用途）。各 CSV の注文番号を和集合で返す。
+    1 回目は常に空集合、未指定時も空集合。
+    """
+    paths_str = os.environ.get("MIGRATION_PREVIOUS_ORDER_IDS_CSV")
+    if not paths_str:
+        return set()
+    order_ids: set[str] = set()
+    for part in paths_str.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        order_ids |= _load_order_ids_from_csv(Path(part))
+    return order_ids

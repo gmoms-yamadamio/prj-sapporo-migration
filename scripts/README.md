@@ -77,8 +77,22 @@ python scripts/generate_member.py
 
 ```bash
 MIGRATION_ROUND=1 python scripts/generate_order.py   # 1回目: 注文日6/30以前 かつ 出荷完了
-MIGRATION_ROUND=2 python scripts/generate_order.py   # 2回目: 前回未移行 かつ 出荷完了（前回移行済みIDの指定は未実装）
+MIGRATION_ROUND=2 python scripts/generate_order.py   # 2回目: 前回未移行 かつ 出荷完了
 ```
+
+2回目・3回目で前回移行済み注文を除外する場合は、環境変数 `MIGRATION_PREVIOUS_ORDER_IDS_CSV` に前回移行済み注文番号の CSV パスを指定する（列名 `注文番号`。無い場合は先頭列）。前回ラウンドの出力 `order.csv` をそのまま指定できる。未指定時は除外なし。
+
+**複数 CSV をカンマ区切りで指定可能**（3回目は1回目・2回目の `order.csv` を両方指定して累積除外する）。各 CSV の注文番号の和集合を除外対象とする。
+
+```bash
+# 2回目: 1回目の order.csv を除外
+MIGRATION_ROUND=2 MIGRATION_PREVIOUS_ORDER_IDS_CSV=output/processed/order_round1.csv python scripts/generate_order.py
+
+# 3回目: 1回目・2回目の order.csv を両方除外（カンマ区切り）
+MIGRATION_ROUND=3 MIGRATION_PREVIOUS_ORDER_IDS_CSV=output/processed/order_round1.csv,output/processed/order_round2.csv python scripts/generate_order.py
+```
+
+> 前回の `order.csv` は `output/` が Git 管理外のため、ラウンドごとに退避・保管しておくこと（例: `order_round1.csv`）。SB00092 側にも重複チェック（`custom_old_order_number`）があるが検索範囲が直近1年に限定されるため、**ETL 層（本指定）での除外を正とし、バッチ層は補助**とする（[business-rules-confirmation.md](../docs/migration-policy/business-rules-confirmation.md) #35）。
 
 ## チェックリストの自動入力
 

@@ -7,11 +7,11 @@
   "2": {
     "cutoff_order_date": null,
     "require_shipped": true,
-    "description": "2回目移行: 前回(1回目)未移行、かつ出荷完了している注文のみ対象（前回移行済み判定は未実装・MIGRATION_PREVIOUS_ORDER_IDS_CSVで指定）"
+    "description": "2回目移行: 前回(1回目)未移行、かつ出荷完了している注文のみ対象。前回移行済み注文は MIGRATION_PREVIOUS_ORDER_IDS_CSV に1回目のorder.csvを指定して除外する"
   },
   "3": {
     "cutoff_order_date": null,
     "require_shipped": true,
-    "description": "3回目移行: 前回(2回目)未移行、かつ出荷完了している注文のみ対象。3回目で全注文の移行完了を想定（前回移行済み判定は未実装・MIGRATION_PREVIOUS_ORDER_IDS_CSVで指定）"
+    "description": "3回目移行: 前回(1・2回目)未移行、かつ出荷完了している注文のみ対象。3回目で全注文の移行完了を想定。前回移行済み注文は MIGRATION_PREVIOUS_ORDER_IDS_CSV に1回目・2回目のorder.csvをカンマ区切りで指定して除外する"
   }
 }
