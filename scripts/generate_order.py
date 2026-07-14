@@ -12,13 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from lib import checklist
 from lib.csv_io import read_csv, write_csv, write_report
-from lib.join_keys import (
-    build_member_records,
-    deleted_usernos,
-    excluded_deleted_members,
-    load_cec_members,
-    resolve_member_email,
-)
+from lib.join_keys import deleted_usernos
 from lib.order_filters import exclusion_reason
 from lib.round_config import current_round, load_already_migrated_order_ids, load_round_rules
 from lib.transforms import (
@@ -30,7 +24,6 @@ from lib.transforms import (
 )
 
 RAW = ROOT / "input" / "raw"
-CEC = ROOT / "input" / "cec"
 OUT = ROOT / "output" / "processed"
 REPORTS = ROOT / "output" / "reports"
 
@@ -78,15 +71,6 @@ def main() -> None:
     accounts = {a["UserNo"]: a for a in accounts_list}
     deleted = deleted_usernos(users_list, accounts_list)
 
-    cec_path = CEC / "member_export.csv"
-    if not cec_path.exists():
-        cec_path = CEC / "member_export_sample.csv"
-    records, _, _ = build_member_records(
-        users_list, accounts_list,
-        load_cec_members(read_csv(cec_path) if cec_path.exists() else []),
-    )
-    email_by_userno = {r.account["UserNo"]: resolve_member_email(r) for r in records}
-
     output_rows: list[dict[str, str]] = []
     unmatched: list[dict[str, str]] = []
     excluded: list[dict[str, str]] = []
@@ -117,12 +101,15 @@ def main() -> None:
         buyer = address_fields(addresses.get(cust.get("orderedAddressId", ""), {}))
         recipient = address_fields(addresses.get(cust.get("invoiceAddressId", ""), {}))
 
-        member_email = email_by_userno.get(cust.get("UserNo", ""), "")
-        if not member_email:
-            acc = accounts.get(cust.get("UserNo", ""))
-            if acc:
-                user = users.get(acc.get("UserName", ""))
-                member_email = user.get("Email", "") if user else ""
+        # 会員注文のメールアドレスは一律「旧サイト User.csv のメールアドレス」とする。
+        # 会員CSVの突合（赤星商店CEC会員との一致判定）はメールアドレス一致で行うため、
+        # 更新パターン（U）の場合 User.csv のメールアドレスと CEC 側メールアドレスは
+        # 定義上一致する。よって注文側では CEC 突合結果を経由せず User.csv を直接参照する。
+        member_email = ""
+        acc = accounts.get(cust.get("UserNo", ""))
+        if acc:
+            user = users.get(acc.get("UserName", ""))
+            member_email = user.get("Email", "") if user else ""
         if not member_email:
             unmatched.append({"orderId": po["orderId"], "UserNo": cust.get("UserNo", "")})
 
