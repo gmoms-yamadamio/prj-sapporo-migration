@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from lib import checklist
 from lib.csv_io import read_csv, write_csv
 from lib.join_keys import build_member_records, load_cec_members, resolve_member_email
 from lib.transforms import is_deleted, join_name, prefecture_name
@@ -35,7 +36,8 @@ def main() -> None:
     cec_by_email = load_cec_members(read_csv(cec_path) if cec_path.exists() else [])
 
     records, _, _ = build_member_records(users, accounts, cec_by_email)
-    record_by_userno = {r.account["UserNo"]: r for r in records}
+    # UserAccount を持たない会員（1.14）は UserNo が無いため住所を紐付けられず対象外。
+    record_by_userno = {r.account["UserNo"]: r for r in records if r.account}
 
     output_rows: list[dict[str, str]] = []
     skipped_no_address: list[dict[str, str]] = []
@@ -66,6 +68,13 @@ def main() -> None:
     write_csv(OUT / "address_import.csv", output_rows, ADDRESS_FIELDS)
     from lib.csv_io import write_report
     write_report(ROOT / "output" / "reports" / "address_id_not_found.csv", skipped_no_address, ["UserNo", "AddressId"])
+
+    # 2回目移行チェックリスト 3.16 に対応（1回目では未使用のIDだが害はない）。
+    checklist.record(
+        ROOT / "output" / "reports", "3.16", len(output_rows),
+        source="generate_address.py",
+        note=f"UserAddress.csv受領件数={len(user_addresses)}件、address_id_not_found（住所ID不明でスキップ）={len(skipped_no_address)}件",
+    )
     print(f"address_import.csv: {len(output_rows)} rows (skipped: {len(skipped_no_address)})")
 
 

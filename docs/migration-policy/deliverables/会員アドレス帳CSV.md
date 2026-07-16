@@ -59,6 +59,21 @@ UserAccount (UserNo)
 
 会員 CSV の突合・振り分けが完了した後に作成する。
 
+## Address.csv のデータ品質（末尾スペース）
+
+旧サイト `Address.csv`（146,533 件）を確認したところ、旧システムの固定長カラムエクスポートに起因する**末尾スペース**が複数項目に含まれている。
+
+| `Address.csv` 項目 | 末尾スペースの有無 | 備考 |
+| --- | --- | --- |
+| `countryCode` | 全件（8 個） | 会員アドレス帳 CSV の出力項目ではない |
+| `zipCode` | 全件（主に 3 個） | 例: `"3000836   "` |
+| `pref` | ほぼ全件（主に 7 個） | 例: `"茨城県       "`。末尾スペースなし 25 件は英語表記（`Kanagawa-k` 等） |
+| `tel` | 全件（19〜27 個） | 例: `"08031123138                     "` |
+| `building` | 4 件のみ（2 個） | |
+| 氏名系・`city`・`street` | なし | |
+
+同一住所を持つ会員の `User.csv` では `ZipCode` 等に末尾スペースはなく、`Address.csv` 固有のデータ形式である。CEC インポート時のバリデーションエラーを避けるため、下記「末尾スペース除去」ルールを適用する（**値の意味を変える正規化ではなく、エクスポート形式のノイズ除去**）。
+
 ## 項目マッピング
 
 結合: `UserAccount.UserNo` → `UserAddress.UserNo` → `Address.addressId`（[join-keys.md](../../csv-interface/join-keys.md)）
@@ -73,12 +88,12 @@ UserAccount (UserNo)
 | お名前（名） | 必須 | `Address.recipientfirstname` | そのまま |
 | お名前（フリガナ）（苗字） | 必須 | `Address.recipientlastnamekana` | そのまま |
 | お名前（フリガナ）（名） | 必須 | `Address.recipientfirstnamekana` | そのまま |
-| 郵便番号 | 必須 | `Address.zipCode` | そのまま |
-| 都道府県 | 必須 | `Address.pref` | マスク値の場合は `User.Prefecture` から補完を検討 |
+| 郵便番号 | 必須 | `Address.zipCode` | **末尾スペース除去**（`rstrip`） |
+| 都道府県 | 必須 | `Address.pref` | **末尾スペース除去**（`rstrip`）後、マスク値 `***` の場合は `User.Prefecture` から補完を検討 |
 | 市区町村 | 必須 | `Address.city` | そのまま |
 | 番地 | 必須 | `Address.street` | そのまま |
-| 建物名等 | 任意 | `Address.building` | そのまま |
-| 電話番号1 | 必須 | `Address.tel` | そのまま |
+| 建物名等 | 任意 | `Address.building` | **末尾スペース除去**（`rstrip`） |
+| 電話番号1 | 必須 | `Address.tel` | **末尾スペース除去**（`rstrip`） |
 
 > 2026-07-09 修正: IF 設計書「会員アドレス帳 CSV 項目」シートでは「お名前（苗字）」「お名前（名）」は別項目として定義されており、事前に結合して 1 項目にするものではない。従来ドキュメントの「結合」という記載を削除し、各項目を個別に転記する方針に修正した。
 
@@ -99,6 +114,7 @@ UserAccount (UserNo)
 - [x] 削除済み会員のアドレス帳移行可否 → **移行対象外（確定）**
 - [x] 「分類」項目 → 固定 `0`（IF 設計書で確定。追加項目）
 - [x] `UserAddress.AddressName` のアドレス名への反映方法 → **`UserAddress.AddressName` をそのまま転記（確定）**
+- [x] `Address.csv` の末尾スペース → **郵便番号・都道府県・建物名等・電話番号1で末尾スペース除去（確定）**
 
 ## 改訂履歴
 
@@ -107,3 +123,4 @@ UserAccount (UserNo)
 | 2026-06-27 | 1.0 | 作業方針設計書から分割作成 |
 | 2026-07-09 | 1.1 | IF 設計書「会員アドレス帳 CSV 項目」シートを反映。「分類」項目（固定 `0`）を追加。「お名前」「お名前（フリガナ）」を苗字・名の別項目に分割 |
 | 2026-07-14 | 1.2 | アドレス名は `UserAddress.AddressName` をそのまま転記する方針を確定 |
+| 2026-07-16 | 1.3 | `Address.csv` の末尾スペース（固定長エクスポート由来）を確認。郵便番号・都道府県・建物名等・電話番号1で末尾スペース除去ルールを確定 |

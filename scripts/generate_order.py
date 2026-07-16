@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +14,12 @@ from lib import checklist
 from lib.csv_io import read_csv, write_csv, write_report
 from lib.join_keys import deleted_usernos
 from lib.order_filters import exclusion_reason
-from lib.round_config import current_round, load_already_migrated_order_ids, load_round_rules
+from lib.round_config import (
+    current_round,
+    is_verification_mode,
+    load_already_migrated_order_ids,
+    load_round_rules,
+)
 from lib.transforms import (
     MANAGEMENT_GROUP_CODE,
     SITE_CODE,
@@ -38,7 +43,27 @@ ORDER_FIELDS = [
     "受取人メールアドレス", "受取人電話番号", "受取人郵便番号", "受取人都道府県名",
     "受取人市区町村", "受取人町名・番地", "受取人建物名", "受取人会社名",
     "受取人会社名カナ", "受取人部署名", "受取人役職",
+    # 以下、IF 設計書の固定値項目（注文履歴CSV.md #109〜119）
+    "調整金額の税率", "調整金額の税区分ID",
+    "決済方法グループコード", "決済手数料", "決済手数料の税率",
+    "発送元コード", "配送温度帯ID", "配送方法グループコード",
+    "配送料の税率", "基本配送料", "在庫引当フラグ",
 ]
+
+# IF 設計書で確定した固定値（[business-rules-confirmation.md] #26 ほか）。
+# 基本配送料は配送料と同値のため行ごとに設定する（下記 main 参照）。
+FIXED_ORDER_VALUES = {
+    "調整金額の税率": "10",              # 税率 10% 前提（IF 設計書の説明列）
+    "調整金額の税区分ID": "tax_type_standard",
+    "決済方法グループコード": "migration-pay-group",
+    "決済手数料": "0",
+    "決済手数料の税率": "10",
+    "発送元コード": "migration-warehouse",
+    "配送温度帯ID": "T1111",
+    "配送方法グループコード": "migration-delivery-group",
+    "配送料の税率": "10",
+    "在庫引当フラグ": "0",
+}
 
 
 def address_fields(addr: dict[str, str]) -> dict[str, str]:
@@ -71,6 +96,21 @@ def main() -> None:
     accounts = {a["UserNo"]: a for a in accounts_list}
     deleted = deleted_usernos(users_list, accounts_list)
 
+    # 受取人住所は DeliveryOrder.addressId で結合する（注文履歴CSV.md #22。
+    # 従来使用していた OrderCustomer.invoiceAddressId は誤りのため使用しない）。
+    delivery_by_order: dict[str, dict[str, str]] = {}
+    for d in read_csv(RAW / "DeliveryOrder.csv"):
+        delivery_by_order.setdefault(d.get("orderId", ""), d)
+
+    # 税額合計・小計は OrderLine を orderId 単位で合算する（#93 / #94。
+    # 従来の「税額合計=0 固定」「小計=合計金額-配送料」は廃止）。
+    tax_by_order: dict[str, float] = defaultdict(float)
+    subtotal_by_order: dict[str, float] = defaultdict(float)
+    for line in read_csv(RAW / "OrderLine.csv"):
+        oid = line.get("orderId", "")
+        tax_by_order[oid] += float(line.get("tax") or 0)
+        subtotal_by_order[oid] += float(line.get("linePrice") or 0)
+
     output_rows: list[dict[str, str]] = []
     unmatched: list[dict[str, str]] = []
     excluded: list[dict[str, str]] = []
@@ -99,7 +139,9 @@ def main() -> None:
         included_total_payment += float(po.get("totalPayment") or 0)
 
         buyer = address_fields(addresses.get(cust.get("orderedAddressId", ""), {}))
-        recipient = address_fields(addresses.get(cust.get("invoiceAddressId", ""), {}))
+        delivery = delivery_by_order.get(po["orderId"])
+        recipient_addr = addresses.get(delivery.get("addressId", ""), {}) if delivery else {}
+        recipient = address_fields(recipient_addr)
 
         # 会員注文のメールアドレスは一律「旧サイト User.csv のメールアドレス」とする。
         # 会員CSVの突合（赤星商店CEC会員との一致判定）はメールアドレス一致で行うため、
@@ -113,19 +155,20 @@ def main() -> None:
         if not member_email:
             unmatched.append({"orderId": po["orderId"], "UserNo": cust.get("UserNo", "")})
 
-        total = float(po.get("totalPayment") or 0)
-        delivery = float(po.get("deliveryCharge") or 0)
         discount = float(po.get("discountPrice") or 0)
+        tax_total = tax_by_order.get(po["orderId"], 0.0)
+        subtotal = subtotal_by_order.get(po["orderId"], 0.0)
 
-        output_rows.append({
+        row = {
             "注文番号": po["orderId"],
             "サイトコード": SITE_CODE,
             "会員ID（メールアドレス）": member_email,
             "注文日": format_order_date(po.get("orderDate", "")),
             "合計金額": to_int_str(po.get("totalPayment", "0")),
-            "税額合計": "0",
-            "小計": str(int(total - delivery)),
+            "税額合計": str(int(round(tax_total))),
+            "小計": str(int(round(subtotal))),
             "配送料": to_int_str(po.get("deliveryCharge", "0")),
+            # 調整金額の符号は #25 未決（CEC はマイナス必須）。現状は素通し
             "調整金額": to_int_str(str(discount)),
             "購入者氏名（苗字）": buyer["last"],
             "購入者氏名（名）": buyer["first"],
@@ -147,7 +190,8 @@ def main() -> None:
             "受取人氏名（名）": recipient["first"],
             "受取人氏名カナ（苗字）": recipient["last_kana"],
             "受取人氏名カナ（名）": recipient["first_kana"],
-            "受取人メールアドレス": cust.get("emailAddr", ""),
+            # 受取人メールは #28 の暫定方針によりブランク（空値）で出力
+            "受取人メールアドレス": "",
             "受取人電話番号": recipient["tel"],
             "受取人郵便番号": recipient["zip"],
             "受取人都道府県名": recipient["pref"],
@@ -158,7 +202,11 @@ def main() -> None:
             "受取人会社名カナ": "",
             "受取人部署名": "",
             "受取人役職": "",
-        })
+            **FIXED_ORDER_VALUES,
+            # 基本配送料は配送料と同値（#118）
+            "基本配送料": to_int_str(po.get("deliveryCharge", "0")),
+        }
+        output_rows.append(row)
 
     write_csv(OUT / "order.csv", output_rows, ORDER_FIELDS)
     write_report(REPORTS / "unmatched_order_members.csv", unmatched, ["orderId", "UserNo"])
@@ -180,7 +228,11 @@ def main() -> None:
             ("3.11_order_csv_total", output_total),
         ],
         source="generate_order.py",
-        note=f"MIGRATION_ROUND={current_round()}",
+        note=(
+            f"MIGRATION_ROUND={current_round()}"
+            f"; MIGRATION_VERIFICATION={'1' if is_verification_mode() else '0'}"
+            f" (cutoff_order_date={cutoff_order_date})"
+        ),
     )
     print(f"order.csv: {len(output_rows)} rows (excluded: {len(excluded)})")
 

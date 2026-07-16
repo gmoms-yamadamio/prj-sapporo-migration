@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from lib import checklist
 from lib.csv_io import read_csv, write_csv
 from lib.join_keys import build_member_records, load_cec_members, resolve_member_email
 from lib.transforms import SITE_CODE, point_total
@@ -37,6 +38,9 @@ def main() -> None:
     output_rows: list[dict[str, str]] = []
 
     for rec in records:
+        # UserAccount を持たない会員（1.14）は UserNo が無いためポイントを紐付けられず対象外。
+        if not rec.account:
+            continue
         pt = points_by_userno.get(rec.account["UserNo"])
         if not pt:
             continue
@@ -55,6 +59,13 @@ def main() -> None:
         })
 
     write_csv(OUT / "member_point.csv", output_rows, POINT_FIELDS)
+
+    # 2回目移行チェックリスト 3.17 に対応（1回目では未使用のIDだが害はない）。
+    checklist.record(
+        OUT.parent / "reports", "3.17", len(output_rows),
+        source="generate_point.py",
+        note=f"PointBankAccount.csv受領件数={len(points_by_userno)}件（UserNo単位）、うち付与ポイント数>0={len(output_rows)}件",
+    )
     print(f"member_point.csv: {len(output_rows)} rows")
 
 

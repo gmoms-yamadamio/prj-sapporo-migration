@@ -13,21 +13,26 @@
 scripts/
 ├── config/
 │   ├── site_id_mapping.json    # サイトコード定数（一律 shupark）
-│   └── round_rules.json        # 移行ラウンド（1〜3回目）ごとの注文抽出ルール
+│   ├── round_rules.json        # 移行ラウンド（1〜3回目）ごとの注文抽出ルール
+│   └── reduced_tax_skus.json   # 軽減税率(8%)対象 SKU 一覧（それ以外は 10%）
 ├── lib/
 │   ├── csv_io.py               # CSV 読込・書込
 │   ├── join_keys.py            # 結合キー・会員突合（重複メール検出含む）
 │   ├── transforms.py           # 値変換（日付・性別・都道府県等）
 │   ├── order_filters.py        # 注文の移行対象判定（出荷完了・カットオフ日付等）
 │   ├── round_config.py         # 移行ラウンド設定の読込み
-│   ├── product_lookup.py       # Products.csv ルックアップ
+│   ├── product_lookup.py       # Products.csv ルックアップ・SKU 税率判定
+│   ├── user_receipt_checks.py  # User.csv 受領時の項目値検証（チェックリスト§1.17〜1.21）
+│   ├── address_receipt_checks.py # Address.csv 受領時の項目値検証（チェックリスト§1.23〜1.26）
+│   ├── order_product_checks.py # 移行対象注文の商品ID突合（チェックリスト§1.22・§3.14）
 │   └── checklist.py            # チェックリスト結果の自動記録
-├── generate_receipt_stats.py   # 受領データ件数の自動集計（チェックリスト§1・2.1）
+├── generate_receipt_stats.py   # 受領データ件数の自動集計・User/Address項目検証・商品ID突合（チェックリスト§1・2.1）
 ├── generate_member.py          # 会員 CSV（新規/更新の2ファイルに分割）
 ├── generate_address.py         # 会員アドレス帳 CSV
 ├── generate_point.py           # 会員ポイント CSV（SB00091 入力）
 ├── generate_order.py           # 注文履歴 CSV（SB00092 入力）
 ├── generate_order_detail.py    # 注文履歴明細 CSV
+├── generate_edge_case_samples.py  # エッジケース対象データの抽出・自動検証（チェックリスト§3.13.1〜3.13.3）
 ├── generate_product_reference.py  # 商品 SKU 参照表
 ├── render_checklist_report.py  # チェックリスト自動集計レポート生成
 ├── record_manual_result.py     # 手動確認項目の結果記録CLI
@@ -60,13 +65,20 @@ python scripts/generate_member.py
 | パス | 内容 |
 | --- | --- |
 | `output/processed/member_import_create.csv` | 会員 CSV（新規登録用。パターンA `C`） |
-| `output/processed/member_import_update.csv` | 会員 CSV（更新用。パターンB `U`） |
+| `output/processed/member_import_update_mailmag.csv` | 会員 CSV（更新用・B-2 メルマガ配信のみ。1回目移行） |
+| `output/processed/member_import_update_full.csv` | 会員 CSV（更新用・B-1 全項目上書き。2回目以降） |
 | `output/processed/address_import.csv` | 会員アドレス帳 CSV |
 | `output/processed/member_point.csv` | SB00091 入力 |
 | `output/processed/order.csv` | SB00092 入力 |
 | `output/processed/order_detail.csv` | SB00092 入力 |
 | `output/products/product_sku_reference.csv` | 商品 SKU 参照表 |
 | `output/reports/*.csv` | 突合不能・未マッチ・除外注文・重複メール等のレポート |
+| `output/reports/edge_case_multi_address_members.csv` | エッジケース①: 複数住所を持つ会員のサンプル（`address_import.csv`行数の整合性判定含む） |
+| `output/reports/edge_case_empty_kana_members.csv` | エッジケース②: カナ氏名が空の会員のサンプル（会員CSVの「名前読み」フォールバック判定含む） |
+| `output/reports/edge_case_positive_discount_orders.csv` | エッジケース③: `discountPrice`が正数の注文のサンプル（`order.csv`調整金額の符号判定含む） |
+| `output/reports/user_csv_validation_errors.csv` | `User.csv` 項目値検証の不正行一覧（§1.17〜1.21。0件の場合は出力されない） |
+| `output/reports/address_csv_validation_errors.csv` | `Address.csv` 項目値検証の不正行一覧（§1.23〜1.26。0件の場合は出力されない） |
+| `output/reports/unmatched_product_ids.csv` | 移行対象注文の商品ID突合不能行一覧（§1.22・§3.14。0件の場合は受領チェック時は出力されない） |
 | `output/reports/checklist_results.json` | チェックリスト結果の生データ（自動/半自動/手動記録の集約） |
 | `output/reports/checklist_report.md` | チェックリスト自動集計レポート（Markdown） |
 
@@ -79,6 +91,20 @@ python scripts/generate_member.py
 MIGRATION_ROUND=1 python scripts/generate_order.py   # 1回目: 注文日6/30以前 かつ 出荷完了
 MIGRATION_ROUND=2 python scripts/generate_order.py   # 2回目: 前回未移行 かつ 出荷完了
 ```
+
+### 移行検証時のカットオフ日付切り替え
+
+受領データの抽出タイミング（例: 7月初旬抽出）によっては、本番移行のカットオフ日付（1回目: 6/30）そのままでは検証できない注文（6/30〜受領日の間の注文）が受領データに含まれてしまう。このため `config/round_rules.json` の各ラウンドに、本番用 `cutoff_order_date` とは別に検証用の `cutoff_order_date_verification` を設定できる。環境変数 `MIGRATION_VERIFICATION`（`1`/`true`/`yes` のいずれかで有効）を指定すると、スクリプトは `cutoff_order_date_verification` の値を使って抽出する。**本番移行時は `MIGRATION_VERIFICATION` を指定しないこと**（未設定時は常に本番用 `cutoff_order_date` を使用）。
+
+```bash
+# 検証: 1回目を 5/31 以前で抽出（受領データが7月初旬抽出のため、本番の6/30ではなく5/31で検証）
+MIGRATION_ROUND=1 MIGRATION_VERIFICATION=1 python scripts/generate_order.py
+
+# 本番: 1回目を 6/30 以前で抽出（MIGRATION_VERIFICATION は指定しない）
+MIGRATION_ROUND=1 python scripts/generate_order.py
+```
+
+検証用の日付を変更したい場合は `config/round_rules.json` の `cutoff_order_date_verification` を編集するだけでよく、スクリプト本体の修正は不要（各スクリプトは `lib/round_config.py` 経由でこの設定ファイルを参照する）。
 
 2回目・3回目で前回移行済み注文を除外する場合は、環境変数 `MIGRATION_PREVIOUS_ORDER_IDS_CSV` に前回移行済み注文番号の CSV パスを指定する（列名 `注文番号`。無い場合は先頭列）。前回ラウンドの出力 `order.csv` をそのまま指定できる。未指定時は除外なし。
 
@@ -100,7 +126,7 @@ MIGRATION_ROUND=3 MIGRATION_PREVIOUS_ORDER_IDS_CSV=output/processed/order_round1
 
 ```bash
 python scripts/run_all.py                                  # ETL一括実行 + チェックリストレポート生成
-python scripts/record_manual_result.py 2.2 "migration-payment001" --by "山田" --judge OK
+python scripts/record_manual_result.py 2.2 "migration-pay-group" --by "山田" --judge OK
 python scripts/parse_sb00092_log.py sb00092_run1.log --mode api
 python scripts/render_checklist_report.py                  # レポートのみ再生成
 ```

@@ -94,7 +94,7 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 | 小計 | 必須 | `OrderLine.linePrice` | **同一 `orderId` の明細行の `linePrice` を合算**（IF 設計書で確定。従来の `totalPayment - deliveryCharge` 計算を廃止） |
 | 配送料 | 必須 | `PurchaseOrder.deliveryCharge` | そのまま |
 | 調整金額 | 必須 | `PurchaseOrder.discountPrice` | **マイナス（-）の値**で設定（IF 設計書の属性が「ハイフン半角数字」。符号がプラスの場合は反転。本番データで符号を要確認） |
-| 管理グループコード | 必須 | — | 固定 `shupark` |
+| 管理グループコード | 必須 | — | 固定 `sp_common`（**2026-07-14 修正**。従来 `shupark` としていたが、商品系（`sp_common`）と統一。詳細は [作業方針設計書.md](../作業方針設計書.md) §9 参照） |
 | 購入者氏名（苗字/名） | 必須 | `OrderCustomer.lastName` / `firstName` | そのまま |
 | 購入者氏名カナ（苗字/名） | 必須 | `OrderCustomer.lastNameKana` / `firstNameKana` | そのまま |
 | 購入者メールアドレス | 必須 | `OrderCustomer.emailAddr` | そのまま |
@@ -108,17 +108,17 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 | 受取人建物名〜役職 | 任意 | `Address`（同上） | `building`。会社名以下は空 |
 | 調整金額の税率 | 任意 | — | 固定 `10`（IF 設計書の説明列より。税率 10% 前提） |
 | 調整金額の税区分ID | 任意 | — | 固定 `tax_type_standard`（IF 設計書の説明列より） |
-| 決済プロファイルコード | 必須 | — | 固定 `migration-payment`（データ移行用決済コード。**確定**） |
+| 決済方法グループコード | 必須 | — | 固定 `migration-pay-group`（データ移行用決済方法グループコード。**確定**。[商品系Excel.md](./商品系Excel.md) の販売条件と統一） |
 | 決済手数料 | 任意 | — | 固定 `0` |
 | 決済手数料の税率 | 任意 | — | 固定 `10` |
 | 発送元コード | 必須 | — | 固定 `migration-warehouse`（データ移行用発送元コード。**確定**） |
 | 配送温度帯ID | 必須 | — | 固定 `T1111`（**確定**。[商品系Excel.md](./商品系Excel.md) の販売条件と統一） |
-| 配送方法コード | 必須 | — | 固定 `migration-delivery`（データ移行用配送方法コード。**確定**） |
+| 配送方法グループコード | 必須 | — | 固定 `migration-delivery-group`（データ移行用配送方法グループコード。**確定**。[商品系Excel.md](./商品系Excel.md) の販売条件と統一） |
 | 配送料の税率 | 必須 | — | 固定 `10` |
 | 基本配送料 | 必須 | `PurchaseOrder.deliveryCharge` | 配送料と同値を設定 |
 | 在庫引当フラグ | 必須 | — | 固定 `0` |
 
-> `決済プロファイルコード` / `発送元コード` / `配送方法コード` の実値は **`migration-payment` / `migration-warehouse` / `migration-delivery` で確定**（[business-rules-confirmation.md](../business-rules-confirmation.md) #26）。これらのコードが CEC 本番マスタに登録済みであることを本番移行前に確認すること。
+> `決済方法グループコード` / `発送元コード` / `配送方法グループコード` の実値は **`migration-pay-group` / `migration-warehouse` / `migration-delivery-group` で確定**（[business-rules-confirmation.md](../business-rules-confirmation.md) #26）。これらのコードが CEC 本番マスタに登録済みであることを本番移行前に確認すること。
 
 ## フィルタルール（確定）
 
@@ -130,6 +130,37 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 | 会員注文で User 結合不能 | `output/reports/unmatched_order_members.csv` |
 
 > **除外理由の判定優先順位**: 削除済み会員 → ゲスト → キャンセル → 二重移行済 → 移行対象期間外 → 未出荷、の順で判定する（`lib/order_filters.py` `exclusion_reason()`）。削除済み会員の注文がキャンセル済みである等、複数の除外条件に該当する場合でも `excluded_orders.csv` の `reason` は常に `deleted_member` を優先して記録し、除外理由の内訳集計（[1回目移行チェックリスト.md](../1回目移行チェックリスト.md) 3.9）が会員単位の除外を正しく反映するようにしている。
+
+## 海外住所を含む配送先（要確認）
+
+移行対象注文の購入者／受取人住所は、それぞれ `OrderCustomer.orderedAddressId`／`DeliveryOrder.addressId` 経由で `Address.csv` を参照する。旧サイトデータには、**日本国内の7桁郵便番号・47都道府県形式に合致しない海外住所**が含まれる。
+
+### クラウドEC（CEC）の制約
+
+| 項目 | CEC の仕様 | 旧サイト `Address.csv` との差異 |
+| --- | --- | --- |
+| 郵便番号 | **7桁の半角数字に限定** | 海外住所は3桁・6桁・9桁等（例: `141`, `200433`, `113725522`） |
+| 都道府県 | **必須**（47都道府県） | 英語表記（`Tokyo-to`, `Kanagawa-k` 等）や州コード（`NY`, `AB` 等）が存在 |
+| 海外発送 | **非対応** | カナダ・米国・中国等の住所が `Address.csv` に存在 |
+
+### 現行データでの影響（参考）
+
+`generate_receipt_stats.py` の `Address.csv` 項目値検証（移行データ受領チェック 1.23〜1.25）および移行対象注文との突合（2026-07-16 時点）:
+
+| 観点 | 件数 | 備考 |
+| --- | --- | --- |
+| `Address.csv` 郵便番号不正（7桁以外） | 3件 | いずれも海外住所（カナダ・米国・中国） |
+| `Address.csv` 都道府県不正（47都道府県名以外） | 120件 | 英語表記・州コード等 |
+| 移行対象注文のうち、購入者住所（`orderedAddressId`）が上記観点で問題あり | **48件** | 受取人住所（`DeliveryOrder.addressId`）のみ問題の注文は0件（現データ） |
+
+※ 上記48件の注文は、現行のフィルタルール上は**移行対象に含まれる**。会員アドレス帳 CSV とは異なり、`UserAddress.csv` 未登録であっても注文履歴 CSV では購入者／受取人住所として `Address.csv` の値がそのまま出力される。
+
+### 要確認事項
+
+- [ ] **海外住所を含む移行対象注文の扱い** — 除外するか、国内形式への変換・ダミー値投入等で移行するか、お客様・CEC仕様と合わせて方針を決定する
+- [ ] SB00092／CEC API が、7桁以外の郵便番号・47都道府県以外の都道府県を含む `order.csv` を受け付けるか（エラーになる場合は ETL 段階での対処が必要）
+
+> 関連: [会員アドレス帳CSV.md](./会員アドレス帳CSV.md)（`Address.csv` の末尾スペース・都道府県表記ゆれ）、移行データ受領チェック 1.23〜1.25、`output/reports/address_csv_validation_errors.csv`
 
 ## 出荷完了の判定条件（確定）
 
@@ -152,7 +183,7 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 ## 未確定事項（TODO）
 
 - [x] `PurchaseOrder` 各金額項目 → 注文履歴 CSV 各項目のマッピング
-- [x] 旧 `siteId` → サイトコード / 管理グループコードの変換表
+- [x] 旧 `siteId` → サイトコード / 管理グループコードの変換表 → サイトコード `shupark` / 管理グループコード `sp_common`（2026-07-14 確定）
 - [x] 購入者・受取人の住所 ID の使い分け → **購入者: `OrderCustomer.orderedAddressId` / 受取人: `DeliveryOrder.addressId`（IF 設計書で確定、`invoiceAddressId` は使用しない）**
 - [x] ゲスト注文の移行対象可否 → **移行対象外**
 - [x] キャンセル済み注文の移行対象可否 → **移行対象外**
@@ -160,9 +191,10 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 - [x] 税額合計の算出方法 → **`OrderLine.tax` の `orderId` 単位合算（IF 設計書で確定）**
 - [x] 小計の算出方法 → **`OrderLine.linePrice` の `orderId` 単位合算（IF 設計書で確定。従来の減算方式は廃止）**
 - [ ] 調整金額（`discountPrice`）の符号（マイナス表記が必須のため、旧データが正数の場合は反転が必要。**本番（移行）データを調査して判断予定**）
-- [x] 決済プロファイルコード／発送元コード／配送方法コードの実際の固定値 → **`migration-payment` / `migration-warehouse` / `migration-delivery`（確定）**。CEC 本番マスタへの登録有無は要確認
+- [x] 決済方法グループコード／発送元コード／配送方法グループコードの実際の固定値 → **`migration-pay-group` / `migration-warehouse` / `migration-delivery-group`（確定）**。CEC 本番マスタへの登録有無は要確認
 - [x] 配送温度帯ID の固定値 → **`T1111`（確定）**
 - [ ] 受取人メールアドレス → **ブランク（空値）で出力する暫定方針。お客様合意が必要**（[business-rules-confirmation.md](../business-rules-confirmation.md) #28）
+- [ ] **海外住所を含む移行対象注文の扱い** — 購入者／受取人住所に `Address.csv` の海外住所（7桁以外の郵便番号・47都道府県以外の都道府県）がそのまま出力される。CEC は郵便番号7桁限定・都道府県必須・海外発送非対応のため、除外・変換等の方針要確認（[海外住所を含む配送先（要確認）](#海外住所を含む配送先要確認) 参照）
 - [x] 「出荷完了」の判定条件 → **`PurchaseOrder.shipDate` が NULL 以外（確定。本番データで確認済み）**（[出荷完了の判定条件（確定）](#出荷完了の判定条件確定) 参照）
 
 ## 改訂履歴
@@ -176,3 +208,6 @@ IF 設計書「注文履歴 CSV 項目」シートのシュパーク列（ファ
 | 2026-07-11 | 1.4 | 「出荷完了」の判定条件（`shipDate` 基準）を本番データで確認済みとして確定 |
 | 2026-07-14 | 1.5 | 除外理由の判定優先順位を変更。削除済み会員の注文を最優先の除外理由とし、キャンセル・ゲスト等と重複する場合も `reason=deleted_member` で記録するよう `exclusion_reason()` を修正（除外理由内訳の集計精度向上のため） |
 | 2026-07-14 | 1.6 | 会員ID（メールアドレス）欄の決定方針を簡略化。会員CSVの突合パターン（新規`C`/更新`U`）を経由せず、会員注文は一律「旧サイト `User.csv` のメールアドレス」を設定する方式に変更（会員CSVの突合はメールアドレス一致で行うため、更新`U`の場合は `User.csv` と CEC 側のメールアドレスが定義上一致することによる） |
+| 2026-07-14 | 1.7 | 管理グループコードを `sp_common` に変更（従来は会員・注文系のみ `shupark`。商品系（`sp_common`）と統一） |
+| 2026-07-16 | 1.9 | 「海外住所を含む配送先（要確認）」を追加。CEC の制約（郵便番号7桁限定・都道府県必須・海外発送非対応）と、移行対象注文の購入者住所に海外形式が含まれる課題（現データで48件）を未確定事項として記載 |
+| 2026-07-14 | 1.8 | 「決済プロファイルコード（`migration-payment`）」を「決済方法グループコード（`migration-pay-group`）」に、「配送方法コード（`migration-delivery`）」を「配送方法グループコード（`migration-delivery-group`）」に名称・コード値を変更。[商品系Excel.md](./商品系Excel.md) の販売条件項目名・コード値と統一するための修正（正式な仕様変更として確定。[business-rules-confirmation.md](../business-rules-confirmation.md) #26） |

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 # 移行元データはすべてシュパーク 1 サイト分
 SITE_CODE = "shupark"
-MANAGEMENT_GROUP_CODE = "shupark"
+# 2026-07-14: 商品系(sp_common)と統一。会員・注文系も一律 sp_common に変更
+MANAGEMENT_GROUP_CODE = "sp_common"
 
 PREFECTURES = {
     "1": "北海道", "2": "青森県", "3": "岩手県", "4": "宮城県", "5": "秋田県",
@@ -21,7 +23,7 @@ PREFECTURES = {
     "46": "鹿児島県", "47": "沖縄県",
 }
 
-SEX_MAP = {"0": "woman", "1": "man", "2": "other", "9": "other"}
+SEX_MAP = {"1": "man", "2": "woman"}
 
 
 def is_deleted(value: str | None) -> bool:
@@ -32,15 +34,87 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def _parse_datetime(value: str) -> datetime | None:
+    if not value or str(value).strip().upper() == "NULL":
+        return None
+    s = str(value).strip()
+    if " +" in s:
+        s = s.split(" +", 1)[0].strip()
+    elif s.endswith("Z"):
+        s = s[:-1]
+    s = s.replace("T", " ")
+    if "." in s:
+        s = s.split(".", 1)[0]
+    match = re.match(
+        r"^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[ T](\d{1,2}):(\d{2}):(\d{2}))?$",
+        s,
+    )
+    if match:
+        year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        if match.group(4) is not None:
+            hour, minute, second = int(match.group(4)), int(match.group(5)), int(match.group(6))
+            return datetime(year, month, day, hour, minute, second)
+        return datetime(year, month, day)
+    try:
+        return datetime.fromisoformat(s.replace("/", "-"))
+    except ValueError:
+        return None
+
+
 def format_birthday(value: str) -> str:
-    """YYYYMMDD（8桁、区切りなし）。IF設計書「会員CSV項目」シートで確定。"""
+    """`YYYY/MM/DD`（月日2桁ゼロ埋め）。会員CSV.md 2026-07-16 確定。"""
+    dt = _parse_datetime(value)
+    if dt:
+        return dt.strftime("%Y/%m/%d")
     if not value or value.upper() == "NULL":
         return ""
-    try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00").split(".")[0])
-        return dt.strftime("%Y%m%d")
-    except ValueError:
-        return "".join(c for c in value[:10] if c.isdigit())
+    digits = "".join(c for c in value if c.isdigit())
+    if len(digits) >= 8:
+        return f"{digits[:4]}/{digits[4:6]}/{digits[6:8]}"
+    return value
+
+
+def format_member_datetime(value: str) -> str:
+    """`YYYY/MM/DD hh:mm:ss`（JST）。会員登録日時・CSV出力日時で使用。"""
+    dt = _parse_datetime(value)
+    if dt:
+        return dt.strftime("%Y/%m/%d %H:%M:%S")
+    return ""
+
+
+def half_width_digits(value: str) -> str:
+    """電話番号・郵便番号向け。全角数字を半角にし、数字以外を除去。"""
+    if not value or value.upper() == "NULL":
+        return ""
+    table = str.maketrans("０１２３４５６７８９", "0123456789")
+    normalized = value.translate(table)
+    return "".join(c for c in normalized if c.isdigit())
+
+
+def kana_or_default(value: str, default: str = "・") -> str:
+    stripped = (value or "").strip()
+    return stripped if stripped else default
+
+
+def format_migration_memo_create(csv_output_at: str) -> str:
+    return f"Created at {csv_output_at}"
+
+
+def format_migration_memo_update(existing: str, csv_output_at: str) -> str:
+    suffix = f"Updated at {csv_output_at}"
+    existing = (existing or "").strip()
+    if not existing:
+        return suffix
+    return f"{existing}/{suffix}"
+
+
+def is_updated_since(value: str, since: str) -> bool:
+    """`value`（User.UpdatedAt 等）が `since`（前回抽出日時）以降か。"""
+    updated_at = _parse_datetime(value)
+    since_at = _parse_datetime(since)
+    if updated_at is None or since_at is None:
+        return False
+    return updated_at >= since_at
 
 
 def format_order_date(value: str) -> str:
@@ -60,6 +134,7 @@ def prefecture_name(code: str) -> str:
 
 
 def sex_code(value: str) -> str:
+    """`1`→`man`, `2`→`woman`, その他→`other`（2026-07-16 確定）。"""
     return SEX_MAP.get(str(value).strip(), "other")
 
 

@@ -72,25 +72,21 @@
 | 販売条件コード | 必須 | `OrderLine.productId` | SKU と同一（`Products.ExternalId1`） |
 | 販売価格 | 必須 | `OrderLine.unitPrice` | 税抜。0 以上の正数 |
 | 基本販売価格 | 必須 | `OrderLine.reportPrice` | **IF 設計書で確定**（`unitPrice` ではなく `reportPrice`） |
-| 販売価格の税率 | 必須 | 未確定（下記「税率ソースの矛盾」参照） | `10`（標準）/ `8`（軽減）/ `0`（非課税） |
+| 販売価格の税率 | 必須 | #21 SKU ホワイトリスト | `productId` → `ExternalId1` 変換後、軽減税率(8%)対象 12 SKU は `8`、それ以外 `10` |
 | 数量 | 必須 | `OrderLine.orderAmount` | そのまま |
 | 販売価格の税端数処理方法 | 必須 | — | 固定 `floor`（IF 設計書より） |
 
-### 税率ソースの矛盾（要確認）
+### 税率の決定方法（確定）
 
-IF 設計書のシュパーク列は「販売価格の税率 ← `OrderLine.csv` / `taxRate`」と記載されているが、実際に受領した `OrderLine.csv` のヘッダーには **`taxRate` 列が存在しない**（`orderLineId,orderLineType,orderId,...,unitPrice,reportPrice,linePrice,tax,...` で、金額としての `tax` はあるが税率としての `taxRate` はない）。
+IF 設計書のシュパーク列は「販売価格の税率 ← `OrderLine.csv` / `taxRate`」と記載されているが、実際に受領した `OrderLine.csv` のヘッダーには **`taxRate` 列が存在しない**（金額としての `tax` はあるが税率としての `taxRate` はない）。`PurchaseOrder.taxRate` もサンプルでは全件 `0` のため利用不可。
 
-一方、`PurchaseOrder.csv` には注文ヘッダ単位で `taxRate` 列が存在する（サンプルでは全件 `0`）。
+**確定方針（[business-rules-confirmation.md](../business-rules-confirmation.md) #21 / #27）:**
 
-**軽減税率対象商品（8%）は存在することが確定している**ため、固定 `10` の一律適用は不可。商品単位の税率を保持する必要がある。
+1. `OrderLine.productId` → `Products.ExternalId1`（SKU）へ変換
+2. SKU が `scripts/config/reduced_tax_skus.json` の一覧に含まれる → `8`
+3. それ以外 → `10`
 
-| 案 | 内容 | 課題 |
-| --- | --- | --- |
-| A | `Products.csv` に税率列を追加してもらい、SKU 単位の税率を適用 | **お客様調整中**（税率列を含めて受領する方向）。受領後はこれを正とする（第一候補） |
-| B | `PurchaseOrder.taxRate`（注文単位）を明細全行に適用 | 注文単位のため明細ごとの軽減／標準の混在に対応できない。サンプルは全件 `0` |
-| C（旧・暫定実装） | 固定 `10` をデフォルト適用 | 軽減税率商品（8%）が存在するため**誤りとなる（不可）** |
-
-→ 案 A（`Products.csv` の税率列）での対応を前提に、税率列の受領を待って実装・検証する（[business-rules-confirmation.md](../business-rules-confirmation.md) #21・#27）。
+実装: `scripts/lib/product_lookup.py` の `tax_rate_for_sku` / `generate_order_detail.py`。
 
 ## 未確定事項（TODO）
 
@@ -98,7 +94,7 @@ IF 設計書のシュパーク列は「販売価格の税率 ← `OrderLine.csv`
 - [x] `productId` → `SKUコード` / `販売条件コード` への変換ルール
 - [x] 基本販売価格の入力元 → `OrderLine.reportPrice`（IF 設計書で確定）
 - [x] 同一 `orderId` に複数明細がある場合の明細番号採番ルール → 0 始まり連番
-- [ ] 税率（`販売価格の税率`）の変換方法 → **軽減税率(8%)対象商品が存在するため固定 `10` は不可**。`Products.csv` への税率列追加をお客様調整中（案 A）。税率列受領後に実装・検証（[business-rules-confirmation.md](../business-rules-confirmation.md) #21・#27）
+- [x] 税率（`販売価格の税率`）の変換方法 → SKU ホワイトリスト（8% 対象 12 SKU、それ以外 10%）で確定（#21 / #27）
 
 ## 改訂履歴
 
@@ -106,3 +102,4 @@ IF 設計書のシュパーク列は「販売価格の税率 ← `OrderLine.csv`
 |---|---|---|
 | 2026-06-27 | 1.0 | 作業方針設計書から分割作成 |
 | 2026-07-09 | 1.1 | IF 設計書のシュパーク列マッピングを反映。基本販売価格を `reportPrice` に確定。税率ソースの矛盾（`taxRate` 列が実データに存在しない）を明記 |
+| 2026-07-14 | 1.2 | 税率を SKU ホワイトリスト方式で確定（案 A の列追加は不要）。実装を `generate_order_detail.py` に反映 |

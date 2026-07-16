@@ -14,6 +14,7 @@ SCRIPTS = [
     "generate_point.py",
     "generate_order.py",
     "generate_order_detail.py",
+    "generate_edge_case_samples.py",
     "generate_product_reference.py",
     "render_checklist_report.py",
 ]

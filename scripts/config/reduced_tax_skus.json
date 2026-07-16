@@ -1,0 +1,20 @@
+{
+  "description": "軽減税率(8%)対象SKU一覧。Customers指定（ExternalId1）。一覧外は一律10%。",
+  "source": "お客様共有（2026-07）",
+  "reduced_tax_rate": "8",
+  "default_tax_rate": "10",
+  "skus": [
+    "si-s170ng-01",
+    "si-s170ng-20",
+    "s198",
+    "si-s198ng-24",
+    "si-s198ng-05",
+    "si-s198ng-12",
+    "hb-s198ng-24",
+    "si-s164ng-05",
+    "si-s164ng-12",
+    "si-s178ng-05",
+    "si-s178ng-12",
+    "si-s178ng-24"
+  ]
+}

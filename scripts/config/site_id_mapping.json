@@ -1,9 +1,9 @@
 {
-  "_comment": "移行元データはすべてシュパーク1サイト。旧siteIdの値に関わらず一律shupark。",
+  "_comment": "移行元データはすべてシュパーク1サイト。旧siteIdの値に関わらず一律shupark。管理グループコードは2026-07-14に商品系と統一し一律sp_common。",
   "site_code": "shupark",
-  "management_group_code": "shupark",
+  "management_group_code": "sp_common",
   "default": {
     "site_code": "shupark",
-    "management_group_code": "shupark"
+    "management_group_code": "sp_common"
   }
 }

@@ -1,17 +1,23 @@
 {
   "1": {
     "cutoff_order_date": "2026-06-30",
+    "cutoff_order_date_verification": "2026-01-31",
     "require_shipped": true,
-    "description": "1回目移行: 注文日(orderDate)が6/30以前、かつ出荷完了(shipDate)している注文のみ対象"
+    "member_previous_extraction_at": null,
+    "description": "1回目移行: 注文日(orderDate)が6/30以前、かつ出荷完了(shipDate)している注文のみ対象。検証時は環境変数 MIGRATION_VERIFICATION=1 を指定すると cutoff_order_date_verification（5/31以前）で抽出する（受領データが7月初旬抽出のため）。member_previous_extraction_at: 1回目は前回抽出日時の概念がないため null"
   },
   "2": {
     "cutoff_order_date": null,
+    "cutoff_order_date_verification": null,
     "require_shipped": true,
-    "description": "2回目移行: 前回(1回目)未移行、かつ出荷完了している注文のみ対象。前回移行済み注文は MIGRATION_PREVIOUS_ORDER_IDS_CSV に1回目のorder.csvを指定して除外する"
+    "member_previous_extraction_at": "2026-07-01 00:00:00",
+    "description": "2回目移行: 前回(1回目)未移行、かつ出荷完了している注文のみ対象。前回移行済み注文は MIGRATION_PREVIOUS_ORDER_IDS_CSV に1回目のorder.csvを指定して除外する。member_previous_extraction_at: 会員CSVの2回目以降突合ロジックで使用する『前回抽出日時』（この日時以降にUser.UpdatedAtが更新されている会員のみ再同期対象とする）。1回目の旧サイトデータ正確な抽出日時は不明のため、少なくともこれより後に抽出されている前提で暫定的に2026-07-01 00:00:00とする（[会員CSV.md](../../docs/migration-policy/deliverables/会員CSV.md)「更新Uの更新項目ロジック」参照）"
   },
   "3": {
     "cutoff_order_date": null,
+    "cutoff_order_date_verification": null,
     "require_shipped": true,
-    "description": "3回目移行: 前回(1・2回目)未移行、かつ出荷完了している注文のみ対象。3回目で全注文の移行完了を想定。前回移行済み注文は MIGRATION_PREVIOUS_ORDER_IDS_CSV に1回目・2回目のorder.csvをカンマ区切りで指定して除外する"
+    "member_previous_extraction_at": null,
+    "description": "3回目移行: 前回(1・2回目)未移行、かつ出荷完了している注文のみ対象。3回目で全注文の移行完了を想定。前回移行済み注文は MIGRATION_PREVIOUS_ORDER_IDS_CSV に1回目・2回目のorder.csvをカンマ区切りで指定して除外する。member_previous_extraction_at: 2回目の実際の抽出日時が確定した時点で設定する（未確定のため null）"
   }
 }

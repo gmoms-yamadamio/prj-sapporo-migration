@@ -86,17 +86,33 @@ ROWS: list[Row] = [
     Row("1.11", "移行対象注文件数（1回目移行対象）", "1.7 かつ 1.8 を満たし、1.9・1.10・削除済み会員注文を除いた件数"),
     Row("1.12", "`OrderLine.csv` 受領件数", "対象注文の明細行数と概ね対応"),
     Row("1.13", "`OrderCustomer.csv`/`Address.csv`/`DeliveryOrder.csv` 受領件数", "各ファイル存在・紐付け可能なこと", combine_1_13),
-    Row("2.1", "赤星商店 CEC 会員データエクスポート件数", "CEC管理画面エクスポート件数"),
-    Row("2.2", "決済プロファイルコードが登録済みであること", "管理画面で確認（手動）"),
+    Row("1.14", "うち有効な`UserAccount`の紐付けがない件数（`UserAccount`なし会員）", "移行対象に含める（確定方針）"),
+    Row("1.15", "うちメールアドレス重複により除外される件数", "UpdatedAt最新（同時刻はId降順）の1件を採用し他は除外"),
+    Row("1.16", "前回までに移行済みの注文件数（`MIGRATION_PREVIOUS_ORDER_IDS_CSV`）", "1回目は常に0件。2回目以降は指定CSVの注文番号数"),
+    Row("1.17", "`User.csv` 郵便番号（`ZipCode`）不正件数", "数字のみで7桁であること（0件）"),
+    Row("1.18", "`User.csv` 都道府県（`Prefecture`）不正件数", "1〜47の整数であること（0件）"),
+    Row("1.19", "`User.csv` 性別（`Sex`）不正件数", "空欄でなく、`{0,1,2,9}` のいずれかであること（0件）"),
+    Row("1.20", "`User.csv` 生年月日（`Birthday`）不正件数", "空欄でなく、日付として解釈可能であること（0件）"),
+    Row("1.21", "`User.csv` 電話番号（`PhoneNumber`）不正件数", "数字のみで10桁または11桁であること（0件）"),
+    Row("1.22", "移行対象注文に紐づく商品データが `Products.csv` にあるか（商品ID突合不能件数）", "0件であること"),
+    Row("1.23", "`Address.csv` 郵便番号（`zipCode`）不正件数", "数字のみで7桁であること（0件）"),
+    Row("1.24", "`Address.csv` 都道府県（`pref`）空欄件数", "空欄でないこと（0件）"),
+    Row("1.25", "`Address.csv` 都道府県（`pref`）不正件数", "末尾スペース除去後、47都道府県名であること（0件）"),
+    Row("1.26", "`Address.csv` 電話番号（`tel`）不正件数", "数字のみで10桁または11桁であること（0件）"),
+    Row("2.1", "赤星商店 CEC 会員データエクスポート件数（2回目以降は更新後の`member_export.csv`件数）", "CEC管理画面エクスポート件数"),
+    Row("2.2", "決済方法グループコードが登録済みであること", "管理画面で確認（手動）"),
     Row("2.3", "発送元コードが登録済みであること", "管理画面で確認（手動）"),
-    Row("2.4", "配送方法コードが登録済みであること", "管理画面で確認（手動）"),
+    Row("2.4", "配送方法グループコードが登録済みであること", "管理画面で確認（手動）"),
     Row("2.5", "配送温度帯IDが登録済みであること", "管理画面で確認（手動）"),
     Row("2.6", "SB00092 実行環境が本番相当に設定済みであること", "設定確認（手動）"),
     Row("2.7", "再実行時の重複防止動作確認（事前検証）", "ステージング環境での事前検証（手動）"),
     Row("2.8", "切り戻し（ロールバック）手順の事前整理", "ドキュメント化・共有済み（手動）"),
+    Row("2.9", "注文抽出カットオフ日付の確認・設定", "本番: 2026-06-30固定（未変更）。検証: MIGRATION_VERIFICATION=1 の設定意図を確認（手動＋実行後の備考欄で照合）"),
+    Row("2.10", "SB00092のダミー注文処理（1回目分）の事前確認", "ステージング環境等での事前検証（手動）"),
     Row("3.1", "会員CSV（新規登録用）件数", "別途カウント"),
-    Row("3.2", "会員CSV（更新用）件数", "別途カウント"),
-    Row("3.3", "3.1 + 3.2 = 1.3 と一致すること", "自動判定"),
+    Row("3.2", "会員CSV（更新用・全項目上書き / 1回目はメルマガ配信のみ）件数", "別途カウント"),
+    Row("3.2.1", "会員CSV（更新用・メルマガ配信のみ）件数", "2回目以降のみ。別途カウント"),
+    Row("3.3", "3.1 + 3.2 (+ 3.2.1) = 1.3 と一致すること", "自動判定"),
     Row("3.4", "突合不能会員リスト件数", "0件であること"),
     Row("3.5", "旧サイト内メール重複リスト件数", "内容確認（最新UpdatedAt優先で集約）"),
     Row("3.6", "商品マスタ／販売基本情報／販売条件の行数", "1.5 と一致すること"),
@@ -106,10 +122,17 @@ ROWS: list[Row] = [
     Row("3.10", "会員CSVのサンプル値目視チェック", "サンプル確認（手動）"),
     Row("3.11", "注文金額サマリ突合（ETL段階）", "受領データ合計 = order.csv合計", combine_3_11),
     Row("3.12", "ETL生成データの値レベル突合（サンプル）", "サンプル確認（手動）"),
-    Row("3.13", "エッジケースのシナリオ確認（ETLサンプル）", "サンプル確認（手動）"),
+    Row("3.13.1", "エッジケース①：複数住所を持つ会員（address_import.csv行数の整合性）", "UserAddress.csv件数 = address_import.csv件数（1住所1行。自動判定）"),
+    Row("3.13.2", "エッジケース②：カナ氏名が空の会員（名前読みのフォールバック変換）", "会員CSV（新規登録用）の「名前読み」が規定のフォールバック値`・`であること（自動判定）"),
+    Row("3.13.3", "エッジケース③：discountPriceが正数の注文（調整金額の符号）", "order.csvの「調整金額」がマイナス値で出力されていること（IF設計書で確定。#25参照。自動判定）"),
+    Row("3.14", "移行対象注文に紐づく商品データが `Products.csv` にあるか（商品ID突合不能件数）", "0件であること"),
+    Row("3.16", "会員アドレス帳CSV（`address_import.csv`）件数", "1回目は参考値。2回目はCEC管理画面インポート対象"),
+    Row("3.17", "会員ポイントCSV（`member_point.csv`）件数", "1回目は参考値。2回目はSB00091入力対象"),
     Row("4.1", "会員データ新規登録：アップロード成功件数", "3.1 と一致すること（手動記録）"),
     Row("4.2", "会員データ新規登録：エラー件数", "0件であること（手動記録）"),
-    Row("4.3", "会員データ更新：アップロード成功件数", "3.2 と一致すること（手動記録）"),
+    Row("4.3", "会員データ更新（全項目上書き / 1回目は更新全体）：アップロード成功件数", "3.2 と一致すること（手動記録）"),
+    Row("4.3.1", "会員データ更新（メルマガ配信のみ）：アップロード成功件数", "3.2.1 と一致すること（手動記録）"),
+    Row("4.3.2", "会員データ更新（メルマガ配信のみ）：エラー件数", "0件であること（手動記録）"),
     Row("4.4", "会員データ更新：エラー件数", "0件であること（手動記録）"),
     Row("4.5", "商品データ登録：成功件数", "3.6 と一致すること（手動記録）"),
     Row("4.6", "商品データ登録：エラー件数", "0件であること（手動記録）"),
@@ -143,23 +166,31 @@ ROWS: list[Row] = [
 # 1.3 / 3.3 / 4.7 / 6.1 / 6.13 / 3.11 は個別ロジックのため derive_judge() 側で直接処理する。
 DERIVED_EQ: list[tuple[str, str]] = [
     ("3.6", "1.5"), ("3.7", "1.11"),
-    ("4.1", "3.1"), ("4.3", "3.2"), ("4.5", "3.6"),
+    ("4.1", "3.1"), ("4.3", "3.2"), ("4.3.1", "3.2.1"), ("4.5", "3.6"),
     ("5.2", "3.7"), ("5.3", "5.2"),
     ("6.2", "4.5"), ("6.3", "5.3"),
 ]
-DERIVED_ZERO: list[str] = ["3.4", "4.2", "4.4", "5.4"]
+DERIVED_ZERO: list[str] = [
+    "1.17", "1.18", "1.19", "1.20", "1.21", "1.22",
+    "1.23", "1.24", "1.25", "1.26",
+    "3.4", "3.14", "4.2", "4.4", "5.4",
+]
 
 
 def derive_judge(check_id: str, results: dict) -> str:
     if check_id == "1.3":
         v1, v2, v3 = to_num_result(results, "1.1"), to_num_result(results, "1.2"), to_num_result(results, "1.3")
+        v15 = to_num_result(results, "1.15") or 0
         if None not in (v1, v2, v3):
-            return "OK" if v3 == v1 - v2 else "NG"
+            return "OK" if v3 == v1 - v2 - v15 else "NG"
         return ""
     if check_id == "3.3":
-        a, b, c = to_num_result(results, "3.1"), to_num_result(results, "3.2"), to_num_result(results, "1.3")
+        a = to_num_result(results, "3.1")
+        b = to_num_result(results, "3.2")
+        b2 = to_num_result(results, "3.2.1") or 0
+        c = to_num_result(results, "1.3")
         if None not in (a, b, c):
-            return "OK" if a + b == c else "NG"
+            return "OK" if a + b + b2 == c else "NG"
         return ""
     if check_id in DERIVED_ZERO:
         v = to_num_result(results, check_id)
@@ -167,14 +198,20 @@ def derive_judge(check_id: str, results: dict) -> str:
             return ""
         return "OK" if v == 0 else "NG"
     if check_id == "6.1":
-        a, b, c = to_num_result(results, "4.1"), to_num_result(results, "4.3"), to_num_result(results, "6.1")
+        a = to_num_result(results, "4.1")
+        b = to_num_result(results, "4.3")
+        b2 = to_num_result(results, "4.3.1") or 0
+        c = to_num_result(results, "6.1")
         if None not in (a, b, c):
-            return "OK" if a + b == c else "NG"
+            return "OK" if a + b + b2 == c else "NG"
         return ""
     if check_id == "4.7":
-        a, b, c = to_num_result(results, "4.1"), to_num_result(results, "4.3"), to_num_result(results, "4.7")
+        a = to_num_result(results, "4.1")
+        b = to_num_result(results, "4.3")
+        b2 = to_num_result(results, "4.3.1") or 0
+        c = to_num_result(results, "4.7")
         if None not in (a, b, c):
-            return "OK" if a + b == c else "NG"
+            return "OK" if a + b + b2 == c else "NG"
         return ""
     if check_id == "6.13":
         gen = results.get("3.11_order_csv_total")
